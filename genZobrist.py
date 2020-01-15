@@ -7,24 +7,24 @@ sets=set() # 确保不重复
 #棋盘的最大宽度是19*19
 
 class Player(Enum): 
-    black=1
-    white=-1
+    black=0
+    white=1
 
     def next(self):
-        return Player.white if self==Player.black else Player.black
+        return player.white if self==player.black else player.black
 
 
 
 
-while len(sets)<9*9*3+1: #每个下子位有空，黑，白三种状态
+while len(sets)<19*19*3+1: #每个下子位有空，黑，白三种状态
     code=random.randint(0,MAX63)
     sets.add(code)
 
 sets=list(sets)
 
 coords=[]
-for row in range(9):
-    for col in range(9):
+for row in range(19):
+    for col in range(19):
         coords.append((row,col))
 
 players=['None','player.black','player.white'] #None是在棋子被提走时起作用的

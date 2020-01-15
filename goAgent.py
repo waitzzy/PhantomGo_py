@@ -4,6 +4,7 @@ import threading
 import copy
 import random
 from utilities import *
+from goEnv import *
 isStopThread=False
 
 
@@ -17,7 +18,8 @@ class mtctThread(threading.Thread): #蒙特卡罗计算类
         self.agent_op=GoAgent(player.other())
         self.result = {} #{(0,0):(winNum,numOfRollOuts,advantage)},记录结果
         self.whos = player
-    def run(self):        
+
+    def run(self):
         global isStopThread #如果只是读取，不赋值的话，全局变量的使用可以不用预先声明
         while not isStopThread: #新的回合            
             
@@ -61,9 +63,9 @@ class mtctThread(threading.Thread): #蒙特卡罗计算类
                     param1=4
                 for i in range(min(int(vacancy_no*.9),param1)): #开始下棋，但是不下完,最多模拟3步
                     if whos_turn==Player.black:
-                        move=self.agent_player.chooseMove('RM',new_board)
+                        move=self.agent_player.simulate(new_board)
                     else:
-                        move=self.agent_op.chooseMove('RM',new_board)
+                        move=self.agent_op.simulate(new_board)
                     #print("BBB",who_win)
                     
                     [game_state,player_next]=GoJudge.NextState(whos_turn,move,new_board)
@@ -116,8 +118,55 @@ def timeDoom():
 class GoAgent:
     def __init__(self,who):
         self.player=who
+        self.KnownList = np.zeros((9,9),dtype='int')
 
-    def chooseMove(self,how,board): #选择在棋盘的哪个位子落子
+    def GetPlayerInt(self):
+        if self.player == Player.black:
+            return 1
+        else:
+            return -1
+
+    def GetDiff(self):
+        sumOfBlack = sum(self.KnownList.flatten() == 1)
+        sumOfWhite = sum(self.KnownList.flatten() == -1)
+        if self.player == Player.black:
+            return int(abs(sumOfBlack - sumOfWhite)) - 1
+        else:
+            return int(abs(sumOfBlack - sumOfWhite))
+
+    def toMCTBoard(self, NormalBoard): #把board转换成numpy数组，现实中可以理解的样子
+        board = GoBoard()
+        for i in range(9):
+            for j in range(9):
+                if NormalBoard[i][j] == 1:
+                    board.envUpdate(Player.black,(i,j))
+                elif NormalBoard[i][j] == -1:
+                    board.envUpdate(Player.white, (i, j))
+        return board
+
+    def SampleFromInformationSet(self):
+        states = []
+        for i in range(1):
+            board = self.toMCTBoard(self.KnownList)
+            for j in range(self.GetDiff()):
+                row = np.random.randint(0, board.height)
+                col = np.random.randint(0, board.width)
+                if GoJudge.isLegalMove(board, (row, col), self.player) and self.isPolicyLegal((row, col), board):
+                    board.envUpdate(self.player, (row, col))
+            states.append(board)
+        return states
+
+    def simulate(self,board):
+        vacancy = board.findVacancy()  # 只在空子处挑选落子位
+        candidates = random.choices(vacancy, k=10)  # 10个候选落子位
+        for i in candidates:
+            if GoJudge.isLegalMove(board, i, self.player) and self.isPolicyLegal(i, board):
+                return i
+        return (-5, -5)
+
+
+    def chooseMove(self,how):   #选择在棋盘的哪个位子落子
+        '''
         if how=='R': #R for random
             episilon=.001 
             if np.random.rand()<=episilon: #千分之一的概率投降
@@ -128,26 +177,24 @@ class GoAgent:
                 if GoJudge.isLegalMove(board,(row,col),self.player) and self.isPolicyLegal((row,col),board):#判断move是否合法（规则合法+策略合法）
                     return (row,col) #stone
             return (-5,-5) #表示pass这个回合
-        if how=='RM': #RM 专门服务于蒙特卡洛算法时用的随机选子策略
-            vacancy=board.findVacancy() #只在空子处挑选落子位
-            candidates=random.choices(vacancy,k=10) #10个候选落子位
-            for i in candidates:
-                if GoJudge.isLegalMove(board,i,self.player) and self.isPolicyLegal(i,board):
-                    return i
-            return (-5,-5)
+        '''
+        board = self.toMCTBoard(self.KnownList)
+        states = self.SampleFromInformationSet()
+        mtct_result = {}
         if how=="M": #M for Monte Carlo
             #这里只建立一个蒙特卡罗的简单版本，作用仅仅是演示
-            global isStopThread #每次使用前先初始化
-            isStopThread=False #演示不支持多线程并发，不过由于python gil的特性，线程并发意义并不大
-            thread_mtct = mtctThread(board,self.player)
-            thread_mtct.setDaemon(True) #父进程结束，子进程就立即结束
-            #thread_time= threading.Timer(1,timeDoom) #测试时每次模拟就1秒
-            thread_time= threading.Timer(0.01,timeDoom) #每次模拟120秒
-            thread_time.start()
-            thread_mtct.start()
-            thread_time.join()    
-            thread_mtct.join()
-            mtct_result=thread_mtct.get_result()
+            for state in states:
+                global isStopThread #每次使用前先初始化
+                isStopThread=False #演示不支持多线程并发，不过由于python gil的特性，线程并发意义并不大
+                thread_mtct = mtctThread(state,self.player)
+                thread_mtct.setDaemon(True) #父进程结束，子进程就立即结束
+                #thread_time= threading.Timer(1,timeDoom) #测试时每次模拟就1秒
+                thread_time= threading.Timer(1,timeDoom) #每次模拟120秒
+                thread_time.start()
+                thread_mtct.start()
+                thread_time.join()
+                thread_mtct.join()
+                mtct_result.update(thread_mtct.get_result())
             #print(mtct_result)
             win_rate=[]
             win_advantage=[]
@@ -160,8 +207,7 @@ class GoAgent:
             win_rate=np.array(win_rate)
             win_advantage=np.array(win_advantage)
             if len(win_advantage) == 0 or len(win_stones) == 0:
-                return (-5,-5)
-            
+                return (-5, -5)
             e=random.random()
             if .5>e:
                 moves=win_stones[win_advantage==win_advantage[win_rate==win_rate.max()].max()]
@@ -189,6 +235,7 @@ class GoAgent:
     def doMove(self,stone,board): #在棋盘上落子
         if(stone!=(-10,10)): 
             board.envUpdate(self.player,stone) #更新棋盘
+            self.KnownList[stone[0],stone[1]] = self.GetPlayerInt()
         else:
             pass            
 
@@ -213,6 +260,11 @@ class GoAgent:
         if is_eye:
             return False
         return True
+
+
+
+
+
     @classmethod
     def staticEvaluation(self,board): #评估当前棋盘的局势,也可用于启发式下棋的参考
         '''
@@ -237,38 +289,38 @@ class GoAgent:
                         #liberties=len(board.stones.get((x,y)).liberties) #考虑子的气的数量                        
                         L=abs(i-x)+abs(j-y)
                         #开始对棋盘分块
-                        if (x<=3 or x>=18-3) and (y<=3 or y>=18-3): #4个角
+                        if (x<=3 or x>=8-3) and (y<=3 or y>=8-3): #4个角
                             if x<=3 and y<=3: # 左下角
                                 if i<=x and j<=y: #在子的左下角
                                     max_influence=(x+y)/2+1
                                     basis=3.5
-                            elif x<=3 and y>=18-3: # 右下角
+                            elif x<=3 and y>=8-3: # 右下角
                                 if i<=x and j>=y: #在子的右下角
-                                    max_influence=(x+18-y)/2+1
+                                    max_influence=(x+8-y)/2+1
                                     basis=3.5
-                            elif x>=18-3 and y>=18-3: # 右上角
+                            elif x>=8-3 and y>=8-3: # 右上角
                                 if i>=x and j>=y: #在子的右上角
-                                    max_influence=(18-x+18-y)/2+1
+                                    max_influence=(8-x+8-y)/2+1
                                     basis=3.5
-                            elif x>=18-3 and y<=3: # 左上角
+                            elif x>=8-3 and y<=3: # 左上角
                                 if i>=x and j>=y: #在子的左上角
-                                    max_influence=(18-x+y)/2+1
+                                    max_influence=(8-x+y)/2+1
                                     basis=3.5
                             else:
                                 pass
 
-                        elif (x<=3 or x>=18-3) or (y<=3 or y>=18-3): #4个边
+                        elif (x<=3 or x>=8-3) or (y<=3 or y>=8-3): #4个边
                             if x<=3: #down
                                 if i<=x:
                                     max_influence=x
                                     basis=3
-                            elif y>=18-3: #right
+                            elif y>=8-3: #right
                                 if j>=y:
-                                    max_influence=18-y
+                                    max_influence=8-y
                                     basis=3
-                            elif x>=18-3: #up
+                            elif x>=8-3: #up
                                 if i>=x:
-                                    max_influence=18-x
+                                    max_influence=8-x
                                     basis=3
                             elif y<=3: #left
                                 if j<=y:
@@ -283,8 +335,13 @@ class GoAgent:
                         eval_array[i,j]+=influence
         return eval_array
 
+
+
+
+
+
     def whoWins(self,board): #判断棋面输赢
-        komi=0 #贴目采用中国规则
+        komi=4.5 #贴目采用中国规则
         count_b=0
         count_w=0
         '''

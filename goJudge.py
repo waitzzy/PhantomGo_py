@@ -6,6 +6,13 @@ import numpy as np
 
 class GoJudge(): #裁判类
     @classmethod
+    def isIllegalMove(cls,board,stone,player):
+        if not board.stones.get(stone) == None:
+            return True
+        else:
+            return False
+
+    @classmethod
     def isLegalMove(cls,board,stone,player): #这里判断围棋规则是否违法,不同的地方规则会有差别，这里使用中国规则
         if stone==(-10,-10) or stone==(-5,-5):
             return True
@@ -33,15 +40,10 @@ class GoJudge(): #裁判类
                 return GameState.g_continue,player_current.other()
         else:
             return GameState.g_continue,player_current.other()
-
-
-    def has_opponent(self,board,stone,player):
-        if board.stones.get(stone) == player.other():
-            return True;
-
+    
     @classmethod
     def getGameResult(cls,board):        
-        komi=0 #贴目采用中国规则
+        komi=4.5 #贴目采用中国规则
         blacks=[]
         whites=[]
         black_territory=set()

@@ -15,7 +15,6 @@ class Game: #game类既可以单步走，也可以用作复现sgf棋谱
     
     def getFrame(self):
         return self.board.toNormalBoard()
-
     def reset(self):
         self.board=GoBoard()
         self.agent=None
@@ -26,7 +25,6 @@ class Game: #game类既可以单步走，也可以用作复现sgf棋谱
         if w_moves is not None:
             for i in w_moves:
                 self.board.envUpdate(Player.white,i)
-
     def runRecap(self,sgf): #只处理sgf里明确输赢的，在调用前判断，这里不再增加判断
         self.setHandicaps(sgf.handicap[0],sgf.handicap[1])
         board_sits_win=[]#记录胜利方棋盘的每一次变化

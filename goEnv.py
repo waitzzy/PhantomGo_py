@@ -14,6 +14,7 @@ class GoBoard: #定义棋盘
         self.zobrist=EMPTY_BOARD
         self.move_records=[] #[(player,move)]
         self.board_records=set()
+
     def envUpdate(self,player,stone): #在棋盘上放子,stone就是move
         if stone==(-5,-5): #pass
             self.board_records.add((player,self.zobrist))
@@ -26,6 +27,7 @@ class GoBoard: #定义棋盘
             same_strings=[] #存放周围己方的子
             opposite_strings=[] #存放周围对方的子
             liberties=[] #存放周围属于当前stone的气
+            takes = []
             for i in uldr: #开始一一甄别周围子的情况,i=(0,0)
                 if not self.isOnBoard(i): #超出棋盘大小就跳过
                     continue
@@ -56,9 +58,11 @@ class GoBoard: #定义棋盘
                             if self.stones.get(k) is not None and self.stones.get(k).becolgings==player:
                                 self.stones.get(k).liberties.add(j)
                         self.stones.pop(j)
+                        takes.append(j)
                         self.updateZobrist(player.other(),j)
             self.board_records.add((player,self.zobrist)) #把棋盘的zobrist保存到board_records记录中
             self.move_records.append((player,stone)) #记录这步操作
+            return takes
 
     def getStoneNeighbours(self,stone): #获取落子点上下左右的点位
         return [ #按下、左、上、右顺时针的顺序
@@ -149,6 +153,8 @@ class GoBoard: #定义棋盘
             else:
                 pass
         return board_array
+
+
 
 
 

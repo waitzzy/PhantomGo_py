@@ -10,8 +10,8 @@ class GameState(Enum):
 
 
 class Player(Enum): 
-    black=1
-    white=-1
+    black=0
+    white=1
 
     def other(self):
         return Player.white if self==Player.black else Player.black

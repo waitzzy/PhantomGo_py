@@ -24,11 +24,9 @@ def to_stone(string):
 
 def main():
     board=GoBoard()
-    boardBlack = GoBoard()
-    boardWhite = GoBoard()
     agent_b=GoAgent(Player.black)
     agent_w=GoAgent(Player.white)
-    #os.system('cls')
+    os.system('cls')
     board.printBoard()
     whosTurn=Player.black
     player_next=whosTurn
@@ -42,35 +40,38 @@ def main():
             move=input('-- ') #A1
             move=to_stone(move.strip())
             '''
-            move=agent_b.chooseMove('M',boardBlack)
+            move=agent_b.chooseMove('M')
         else:
-            move=agent_w.chooseMove('M',boardWhite)
+            move=agent_w.chooseMove('M')
             '''
             move=input('-- ') #A1
             move=to_stone(move.strip())
             '''
-        '''
-        
-        if not GoJudge.isLegalMove(board,move,whosTurn):
-            continue
-        '''
-
-        if GoJudge.has_opponent(board,move,whosTurn):
+        if GoJudge.isIllegalMove(board,move,whosTurn) == True:
             if whosTurn == Player.black:
-                boardBlack.envUpdate(Player.white,move)
-            elif whosTurn == Player.white:
-                boardWhite.envUpdate(Player.black,move)
+                agent_b.KnownList[move[0],move[1]] = -1
+            else:
+                agent_w.KnownList[move[0],move[1]] = 1
             continue
 
         [game_state,player_next]=GoJudge.NextState(whosTurn,move,board)
-        board.envUpdate(whosTurn,move)
-        if whosTurn == Player.black:
-            boardBlack.envUpdate(Player.black, move)
-        elif whosTurn == Player.white:
-            boardWhite.envUpdate(Player.white, move)
+        takesinfo = board.envUpdate(whosTurn,move)
+        if len(takesinfo) != 0:
+           for i in takesinfo:
+                agent_b.KnownList[i[0], i[1]] = 0
+                agent_w.KnownList[i[0], i[1]] = 0
+                if whosTurn == Player.black:
+                    for j in board.getStoneNeighbours(i):
+                        if j not in takesinfo:
+                            agent_w.KnownList[j[0], j[1]] = 1
+                elif whosTurn == Player.white:
+                    for j in board.getStoneNeighbours(i):
+                        if j not in takesinfo:
+                            agent_b.KnownList[j[0], j[1]] = -1
+
 
         if game_state!=GameState.g_over and game_state!=GameState.g_resign:
-            #os.system('cls')
+            os.system('cls')
             board.printBoard()
             #print(board.toNormalBoard())
             whosTurn=player_next
