@@ -23,18 +23,25 @@ def to_stone(string):
 
 
 def main():
+    blackwin = 0
+    whitewin = 0
     board=GoBoard()
     agent_b=GoAgent(Player.black)
     agent_w=GoAgent(Player.white)
     os.system('cls')
-    board.printBoard()
+   # board.printBoard()
     whosTurn=Player.black
     player_next=whosTurn
     game_state=GameState.g_continue
     count=0
     while game_state==GameState.g_continue:
         count+=1
-        time.sleep(.3)        
+        #time.sleep(.3)
+        print("裁判棋盘：")
+        board.printBoard()
+        #agent_b.PrintInformationSet()
+        #agent_w.PrintInformationSet()
+        print("当前玩家：",whosTurn)
         if whosTurn==Player.black:
             '''人工输入
             move=input('-- ') #A1
@@ -48,6 +55,7 @@ def main():
             move=to_stone(move.strip())
             '''
         if GoJudge.isIllegalMove(board,move,whosTurn) == True:
+            print("该Move违法")
             if whosTurn == Player.black:
                 agent_b.KnownList[move[0],move[1]] = -1
             else:
@@ -56,18 +64,27 @@ def main():
 
         [game_state,player_next]=GoJudge.NextState(whosTurn,move,board)
         takesinfo = board.envUpdate(whosTurn,move)
-        if len(takesinfo) != 0:
-           for i in takesinfo:
-                agent_b.KnownList[i[0], i[1]] = 0
-                agent_w.KnownList[i[0], i[1]] = 0
-                if whosTurn == Player.black:
-                    for j in board.getStoneNeighbours(i):
-                        if j not in takesinfo:
-                            agent_w.KnownList[j[0], j[1]] = 1
-                elif whosTurn == Player.white:
-                    for j in board.getStoneNeighbours(i):
-                        if j not in takesinfo:
-                            agent_b.KnownList[j[0], j[1]] = -1
+        if takesinfo != None:
+            if len(takesinfo) != 0:
+               for i in takesinfo:
+                    agent_b.KnownList[i[0], i[1]] = 0
+                    agent_w.KnownList[i[0], i[1]] = 0
+                    if whosTurn == Player.black:
+                        for j in board.getStoneNeighbours(i):
+                            if j not in takesinfo:
+                                if j[0] >= 0 and j[0] <= 8 and j[1] >= 0 and j[1] <= 8:
+                                    agent_w.KnownList[j[0], j[1]] = 1
+                    elif whosTurn == Player.white:
+                        for j in board.getStoneNeighbours(i):
+                            if j not in takesinfo:
+                                if j[0] >=0 and j[0] <= 8 and j[1] >=0 and j[1] <= 8:
+                                    agent_b.KnownList[j[0], j[1]] = -1
+               print("提子！！！！！")
+
+        if whosTurn == Player.black:#更新自己的informationSet
+            agent_b.KnownList[move[0], move[1]] = 1
+        else:
+            agent_w.KnownList[move[0], move[1]] = -1
 
 
         if game_state!=GameState.g_over and game_state!=GameState.g_resign:
@@ -75,7 +92,6 @@ def main():
             board.printBoard()
             #print(board.toNormalBoard())
             whosTurn=player_next
-            print(whosTurn)
         #print(board.findVacancy())
         '''
         if count%15==0:
@@ -96,8 +112,10 @@ def main():
         #'''
         if result>0:
             print("black wins")
+            blackwin = blackwin + 1
         elif result<0:
             print("white wins")
+            whitewin = whitewin + 1
         else: #贴7.5目，所以不会平局
             print("ties")
         #'''

@@ -6,8 +6,8 @@ import random
 from utilities import *
 from goEnv import *
 isStopThread=False
-
-
+import Dboard
+import math
 
 
 class mtctThread(threading.Thread): #蒙特卡罗计算类
@@ -18,91 +18,185 @@ class mtctThread(threading.Thread): #蒙特卡罗计算类
         self.agent_op=GoAgent(player.other())
         self.result = {} #{(0,0):(winNum,numOfRollOuts,advantage)},记录结果
         self.whos = player
+        self.visNum = {} #{(0,0):visttimes}
+        self.confident = 1.96   #UCB常数
+        self.AllvisTime = 0
+
+    def UCT(self,win,vis,Allvis):
+        UCTvalue = (win/vis) + self.confident * math.sqrt(math.log(Allvis)/vis)
+        return UCTvalue
+
 
     def run(self):
-        global isStopThread #如果只是读取，不赋值的话，全局变量的使用可以不用预先声明
-        while not isStopThread: #新的回合            
-            
-        #test_count=1 #测试用，限制模拟次数
-        #while test_count!=0:
-            #print(test_count)
-            #test_count-=1
+        global isStopThread
+        while not isStopThread: #新的回合
             
             vacancies=self.board.findVacancy()
-            num=0
-            for j in vacancies: #每个子位，第一步必须下到j位上
-                num+=1
-                new_board=copy.deepcopy(self.board) #初始化模拟运行的棋盘
-                whos_turn = self.whos
-                who_win=0
-                if not GoJudge.isLegalMove(new_board,j,self.whos) or not self.agent_player.isPolicyLegal(j,new_board):
-                    continue
-                [game_state,player_next]=GoJudge.NextState(whos_turn,j,new_board)
-                new_board.envUpdate(whos_turn,j)
-                if game_state!=GameState.g_over: #模拟下棋不会投降，要么结束要么继续
-                    whos_turn=player_next
-                else: #一局结束了,判断输赢
-                    who_win=self.agent_player.whoWins(new_board)
-                    if who_win==self.whos:
-                        win=1
-                    else: #平局或者对方赢了
-                        win=0
-                    record=self.result.get(j)
-                    #更新这个位子落点的结果
-                    if record== None:
-                        self.result[j]=(win,1)
-                    else:
-                        self.result[j]=(record[0]+win,record[1]+1)
-                        continue
-                vacancy=new_board.findVacancy()
-                vacancy_no=len(vacancy)-1                
-                #print("AAA",int(vacancy_no*.9))
-                if self.whos == Player.black: 
-                    param1=3
-                else:
-                    param1=4
-                for i in range(min(int(vacancy_no*.9),param1)): #开始下棋，但是不下完,最多模拟3步
-                    if whos_turn==Player.black:
-                        move=self.agent_player.simulate(new_board)
-                    else:
-                        move=self.agent_op.simulate(new_board)
-                    #print("BBB",who_win)
-                    
-                    [game_state,player_next]=GoJudge.NextState(whos_turn,move,new_board)
-                    #print("XXXXXXXXX",move)
-                    new_board.envUpdate(whos_turn,move)
+            #num=0
+            expandFlag  = True
+            if expandFlag:
+                for j in vacancies:
+                    #num+=1
+                    self.AllvisTime += 1
 
-                    
-                    if game_state!=GameState.g_over and game_state!=GameState.g_resign:
+                    new_board=copy.deepcopy(self.board) #初始化模拟运行的棋盘
+                    whos_turn = self.whos
+                    who_win=0
+
+                    if not GoJudge.isLegalMove(new_board,j,self.whos) or not self.agent_player.isPolicyLegal(j,new_board):
+                        continue
+                    [game_state,player_next]=GoJudge.NextState(whos_turn,j,new_board)
+                    new_board.envUpdate(whos_turn,j)
+                    if game_state!=GameState.g_over: #模拟下棋不会投降，要么结束要么继续
                         whos_turn=player_next
-                    else:
-                        [who_win,advantages]=self.agent_player.whoWins(new_board)
+                    else: #一局结束了,判断输赢
+                        who_win=self.agent_player.whoWins(new_board)
                         if who_win==self.whos:
                             win=1
                         else: #平局或者对方赢了
                             win=0
                         record=self.result.get(j)
                         #更新这个位子落点的结果
+                        if record == None:
+                            self.result[j]=(win,1)
+                        else:
+                            self.result[j]=(record[0]+win,record[1]+1)
+                            continue
+                    vacancy=new_board.findVacancy()
+                    vacancy_no=len(vacancy)-1
+                    #print("AAA",int(vacancy_no*.9))
+                    if self.whos == Player.black:
+                        param1=3
+                    else:
+                        param1=4
+                    for i in range(min(int(vacancy_no*.9),param1)): #开始下棋，但是不下完,最多模拟3步
+                        if whos_turn==Player.black:
+                            move=self.agent_player.simulate(new_board)
+                        else:
+                            move=self.agent_op.simulate(new_board)
+                        #print("BBB",who_win)
+
+                        [game_state,player_next]=GoJudge.NextState(whos_turn,move,new_board)
+                        #print("XXXXXXXXX",move)
+                        new_board.envUpdate(whos_turn,move)
+
+
+                        if game_state!=GameState.g_over and game_state!=GameState.g_resign:
+                            whos_turn=player_next
+                        else:
+                            [who_win,advantages]=self.agent_player.whoWins(new_board)
+                            if who_win==self.whos:
+                                win=1
+                            else: #平局或者对方赢了
+                                win=0
+                            record=self.result.get(j)
+                            #更新这个位子落点的结果
+                            if record== None:
+                                self.result[j]=(win,1,advantages)
+                            else:
+                                self.result[j]=(record[0]+win,record[1]+1,record[2]+advantages)
+                                break
+
+
+                    if who_win==0:
+                        #print("DDDDDDDD",j)
+                        [who_win,advantages]=self.agent_player.whoWins(new_board)
+                        if who_win==self.whos:
+                            win=1
+                        else:
+                            win=0
+                        record=self.result.get(j)
                         if record== None:
                             self.result[j]=(win,1,advantages)
                         else:
                             self.result[j]=(record[0]+win,record[1]+1,record[2]+advantages)
-                            break
-                
-                
-                if who_win==0:
-                    #print("DDDDDDDD",j)
-                    [who_win,advantages]=self.agent_player.whoWins(new_board)
-                    if who_win==self.whos:
-                        win=1
+        #        print("总模拟次数：", num)    #print("RRRR",j)
+
+            expandFlag = False
+            j = (5,5)
+            max = 0;
+            for child in vacancies:
+                # num+=1
+                self.AllvisTime += 1
+                record = self.result[child]
+                if record == None:
+                    continue
+                UCTvalue = self.UCT(record[0],record[1],self.AllvisTime)
+                if max < UCTvalue :
+                    j = child
+
+            new_board = copy.deepcopy(self.board)  # 初始化模拟运行的棋盘
+            whos_turn = self.whos
+            who_win = 0
+
+            if not GoJudge.isLegalMove(new_board, j, self.whos) or not self.agent_player.isPolicyLegal(j,
+                                                                                                       new_board):
+                continue
+            [game_state, player_next] = GoJudge.NextState(whos_turn, j, new_board)
+            new_board.envUpdate(whos_turn, j)
+            if game_state != GameState.g_over:  # 模拟下棋不会投降，要么结束要么继续
+                whos_turn = player_next
+            else:  # 一局结束了,判断输赢
+                who_win = self.agent_player.whoWins(new_board)
+                if who_win == self.whos:
+                    win = 1
+                else:  # 平局或者对方赢了
+                    win = 0
+                record = self.result.get(j)
+                # 更新这个位子落点的结果
+                if record == None:
+                    self.result[j] = (win, 1)
+                else:
+                    self.result[j] = (record[0] + win, record[1] + 1)
+                    continue
+            vacancy = new_board.findVacancy()
+            vacancy_no = len(vacancy) - 1
+            # print("AAA",int(vacancy_no*.9))
+            if self.whos == Player.black:
+                param1 = 3
+            else:
+                param1 = 4
+            for i in range(min(int(vacancy_no * .9), param1)):  # 开始下棋，但是不下完,最多模拟3步
+                if whos_turn == Player.black:
+                    move = self.agent_player.simulate(new_board)
+                else:
+                    move = self.agent_op.simulate(new_board)
+                # print("BBB",who_win)
+
+                [game_state, player_next] = GoJudge.NextState(whos_turn, move, new_board)
+                # print("XXXXXXXXX",move)
+                new_board.envUpdate(whos_turn, move)
+
+                if game_state != GameState.g_over and game_state != GameState.g_resign:
+                    whos_turn = player_next
+                else:
+                    [who_win, advantages] = self.agent_player.whoWins(new_board)
+                    if who_win == self.whos:
+                        win = 1
+                    else:  # 平局或者对方赢了
+                        win = 0
+                    record = self.result.get(j)
+                    # 更新这个位子落点的结果
+                    if record == None:
+                        self.result[j] = (win, 1, advantages)
                     else:
-                        win=0
-                    record=self.result.get(j)
-                    if record== None:
-                        self.result[j]=(win,1,advantages)
-                    else:
-                        self.result[j]=(record[0]+win,record[1]+1,record[2]+advantages)
-                #print("RRRR",j)
+                        self.result[j] = (record[0] + win, record[1] + 1, record[2] + advantages)
+                        break
+
+            if who_win == 0:
+                # print("DDDDDDDD",j)
+                [who_win, advantages] = self.agent_player.whoWins(new_board)
+                if who_win == self.whos:
+                    win = 1
+                else:
+                    win = 0
+                record = self.result.get(j)
+                if record == None:
+                    self.result[j] = (win, 1, advantages)
+                else:
+                    self.result[j] = (record[0] + win, record[1] + 1, record[2] + advantages)
+    #        print("总模拟次数：", num)    #print("RRRR",j)
+
 
     def get_result(self):
         try:
@@ -119,6 +213,33 @@ class GoAgent:
     def __init__(self,who):
         self.player=who
         self.KnownList = np.zeros((9,9),dtype='int')
+
+    def PrintInformationSet(self):
+
+        print("当前玩家的信息集:  ",self.player)
+        COLS = 'ABCDEFGHJKLMNOPQRST'  # 定义棋盘的列的名称
+        STONE_TO_CHAR = {  # 棋盘上的展示的符号
+            None: ' . ',
+            Player.black: ' x ',
+            Player.white: ' o ',
+        }
+        for row in range(9):
+            bump = " " if row > 8 else ""
+            line = []
+            for col in range(9):
+                stone = self.KnownList[8 - row][col]
+                if stone == 1:
+                    player = Player.black
+                    line.append(STONE_TO_CHAR.get(player))
+                elif stone == -1:
+                    player = Player.white
+                    line.append(STONE_TO_CHAR.get(player))
+                else:
+                    player = None
+                    line.append(STONE_TO_CHAR.get(player))
+            print('%s%d %s' % (bump, 8 - row, ''.join(line)))
+        print('    ' + '  '.join(COLS[:9]))
+
 
     def GetPlayerInt(self):
         if self.player == Player.black:
@@ -145,14 +266,19 @@ class GoAgent:
         return board
 
     def SampleFromInformationSet(self):
+        p = Dboard.GetDistributedBoard()
         states = []
         for i in range(1):
             board = self.toMCTBoard(self.KnownList)
             for j in range(self.GetDiff()):
-                row = np.random.randint(0, board.height)
-                col = np.random.randint(0, board.width)
-                if GoJudge.isLegalMove(board, (row, col), self.player) and self.isPolicyLegal((row, col), board):
-                    board.envUpdate(self.player, (row, col))
+                flatIdx = np.random.choice(np.array([idx for idx in range(81)]), 1, p=p)
+                action_opp = (int(flatIdx / 9), int(flatIdx % 9))
+                #row = np.random.randint(0, board.height)
+                #col = np.random.randint(0, board.width)
+                #int(row)
+                #int(col)
+                if GoJudge.isLegalMove(board, action_opp, self.player) and self.isPolicyLegal(action_opp, board):
+                    board.envUpdate(self.player, action_opp)
             states.append(board)
         return states
 
@@ -182,14 +308,13 @@ class GoAgent:
         states = self.SampleFromInformationSet()
         mtct_result = {}
         if how=="M": #M for Monte Carlo
-            #这里只建立一个蒙特卡罗的简单版本，作用仅仅是演示
             for state in states:
                 global isStopThread #每次使用前先初始化
-                isStopThread=False #演示不支持多线程并发，不过由于python gil的特性，线程并发意义并不大
+                isStopThread=False
                 thread_mtct = mtctThread(state,self.player)
                 thread_mtct.setDaemon(True) #父进程结束，子进程就立即结束
-                #thread_time= threading.Timer(1,timeDoom) #测试时每次模拟就1秒
-                thread_time= threading.Timer(1,timeDoom) #每次模拟120秒
+                #thread_time= threading.Timer(1,timeDoom)
+                thread_time= threading.Timer(1,timeDoom) #每次模拟1秒
                 thread_time.start()
                 thread_mtct.start()
                 thread_time.join()
